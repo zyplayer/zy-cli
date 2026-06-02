@@ -9,7 +9,6 @@ module.exports = function(program) {
     cmd.command('list')
         .description('查看文档列表')
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
-        .option('--version <version>', '版本号', Number)
         .action(async (opts) => {
             const config = getConfig();
             const fields = [
@@ -17,7 +16,7 @@ module.exports = function(program) {
             ];
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId) { console.log('--spaceId 不能为空'); return; }
-            const params = buildParams(opts, ['spaceId', 'version']);
+            const params = buildParams(opts, ['spaceId']);
             try { printResult(await request(config, '/openApi/v1/space/page/list', params), fields); }
             catch (err) { handleError(err); }
         });
@@ -32,14 +31,13 @@ module.exports = function(program) {
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
         .option('--editorType <editorType>', '编辑类型 0=文件夹 1=HTML 2=Markdown 5=原始文件', Number)
         .option('--editVersion <editVersion>', '编辑版本号（修改时必填，需通过 zy-cli page detail 获取）', Number)
-        .option('--content <content>', '文档内容')
+        .option('--content <content>', '文档内容，为空时已有的内容会被清空')
         .option('--preview <preview>', '搜索内容/预览')
-        .option('--release', '是否直接发布')
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId || !opts.name) { console.log('--spaceId 和 --name 不能为空'); return; }
-            const params = buildParams(opts, ['id', 'spaceId', 'name', 'parentId', 'editorType', 'editVersion', 'content', 'preview', 'release']);
+            const params = buildParams(opts, ['id', 'spaceId', 'name', 'parentId', 'editorType', 'editVersion', 'content', 'preview']);
             try { printResult(await request(config, '/openApi/v1/space/page/update', params)); }
             catch (err) { handleError(err); }
         });
@@ -81,7 +79,7 @@ module.exports = function(program) {
         .description('删除文档')
         .option('--pageId <pageId>', '文档ID（必填）', Number)
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
-        .option('--delFlag <delFlag>', '删除标记 1=回收站 2=从回收站删除', Number)
+        .option('--delFlag <delFlag>', '删除标记 1=移至回收站 2=从回收站删除（必填）', Number)
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
@@ -91,22 +89,10 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 
-    cmd.command('release')
-        .description('发布文档')
-        .option('--id <id>', '文档ID（必填）', Number)
-        .action(async (opts) => {
-            const config = getConfig();
-            if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
-            if (!opts.id) { console.log('--id 不能为空'); return; }
-            const params = buildParams(opts, ['id']);
-            try { printResult(await request(config, '/openApi/v1/space/page/release', params)); }
-            catch (err) { handleError(err); }
-        });
-
     cmd.command('share')
         .description('分享文档')
         .option('--id <id>', '文档ID（必填）', Number)
-        .option('--shareFlag <shareFlag>', '是否公开分享 1=是', Number)
+        .option('--shareFlag <shareFlag>', '是否公开分享 0=否 1=是（必填）', Number)
         .option('--shareIncludeChildren <v>', '分享包含子页面 0=否 1=是', Number)
         .option('--sharePassword <sharePassword>', '分享访问密码')
         .option('--shareExpirationDate <date>', '分享有效期，格式示例：2025-12-31 23:59:59')
@@ -116,7 +102,14 @@ module.exports = function(program) {
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.id) { console.log('--id 不能为空'); return; }
             const params = buildParams(opts, ['id', 'shareFlag', 'shareIncludeChildren', 'sharePassword', 'shareExpirationDate', 'uuid']);
-            try { printResult(await request(config, '/openApi/v1/space/page/share', params)); }
+            try {
+                const result = await request(config, '/openApi/v1/space/page/share', params);
+                if (!opts.shareFlag) { printResult(result); return; }
+                const uuid = result && result.data;
+                if (!uuid) { console.log('分享失败，未获取到 uuid'); return; }
+                const urlPath = opts.shareIncludeChildren ? '/#/docs/' + uuid : '/#/doc/' + uuid;
+                console.log(config.url + urlPath);
+            }
             catch (err) { handleError(err); }
         });
 
@@ -130,13 +123,29 @@ module.exports = function(program) {
         .action(async (opts) => {
             const config = getConfig();
             const fields = [
-                'pageId', 'pageTitle', 'previewContent', 'spaceId', 'spaceName', 'editorType', 'updateTime', 'parentId', 'matchScore'
+                'pageId', 'pageTitle', 'previewContent', 'spaceId', 'spaceName', 'paragraphList'
             ];
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.keywords) { console.log('--keywords 不能为空'); return; }
             const params = buildParams(opts, ['spaceId', 'keywords', 'pageNum', 'fromName', 'fromContent']);
             params.markRed = false;
-            try { printResult(await request(config, '/openApi/v1/space/page/search', params), fields); }
+            let res = await request(config, '/openApi/v1/space/page/search', params);
+            // 过滤 paragraphList 中每条记录的字段
+            if (res && res.data && Array.isArray(res.data)) {
+                const paraFields = ['content', 'startLine', 'endLine', 'startPos', 'endPos', 'keyword'];
+                res.data = res.data.map(function(item) {
+                    if (item.paragraphList && Array.isArray(item.paragraphList) && item.paragraphList.length > 0) {
+                        item.previewContent = undefined;
+                        item.paragraphList = item.paragraphList.map(function(p) {
+                            let filtered = {};
+                            paraFields.forEach(function(f) { if (p[f] !== undefined) filtered[f] = p[f]; });
+                            return filtered;
+                        });
+                    }
+                    return item;
+                });
+            }
+            try { printResult(res, fields); }
             catch (err) { handleError(err); }
         });
 

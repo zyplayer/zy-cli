@@ -23,34 +23,16 @@ module.exports = function(program) {
         .description('新增或修改空间')
         .option('--id <id>', '空间ID，有值为修改，无值为新增', Number)
         .option('--name <name>', '空间名（必填）')
-        .option('--type <type>', '空间类型 1=公司 2=个人', Number)
-        .option('--explain <explain>', '描述')
-        .option('--uuid <uuid>', '唯一UUID')
-        .option('--seqNo <seqNo>', '排序', Number)
-        .option('--versionControl <v>', '是否开启版本控制 0=否 1=是', Number)
-        .option('--viewerExport <v>', '查看者是否支持导出 1=是', Number)
-        .option('--copyControl <v>', '是否允许复制 0=否 1=是', Number)
+        .option('--type <type>', '空间公开范围 1=所有登录用户可见 2=仅空间成员可见', Number)
+        .option('--explain <explain>', '空间描述')
         .option('--chargeUserId <uid>', '负责人ID', Number)
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.name) { console.log('--name 不能为空'); return; }
-            const params = buildParams(opts, ['id', 'name', 'type', 'spaceExplain', 'uuid', 'seqNo', 'versionControl', 'viewerAllowedExport', 'copyControl', 'chargeUserId'],
+            const params = buildParams(opts, ['id', 'name', 'type', 'spaceExplain', 'chargeUserId'],
                 { spaceExplain: 'explain', viewerAllowedExport: 'viewerExport' });
             try { printResult(await request(config, '/openApi/v1/space/update', params)); }
-            catch (err) { handleError(err); }
-        });
-
-    cmd.command('create-version')
-        .description('空间发版')
-        .option('--spaceId <spaceId>', '空间ID（必填）', Number)
-        .option('--versionName <versionName>', '版本名（必填）')
-        .action(async (opts) => {
-            const config = getConfig();
-            if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
-            if (!opts.spaceId || !opts.versionName) { console.log('--spaceId 和 --versionName 不能为空'); return; }
-            const params = buildParams(opts, ['spaceId', 'versionName']);
-            try { printResult(await request(config, '/openApi/v1/space/createVersion', params)); }
             catch (err) { handleError(err); }
         });
 
@@ -61,7 +43,7 @@ module.exports = function(program) {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId) { console.log('--spaceId 不能为空'); return; }
-            const params = buildParams(opts, ['spaceId'], { moduleId: 'spaceId' });
+            const params = buildParams(opts, ['moduleId'], { moduleId: 'spaceId' });
             params.moduleType = 1;
             try { printResult(await request(config, '/openApi/v1/spaceAuth/list', params)); }
             catch (err) { handleError(err); }

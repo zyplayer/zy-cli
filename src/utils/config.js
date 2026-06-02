@@ -113,7 +113,7 @@ function getConfig() {
     const envDeviceCode = process.env.ZY_CLI_DEVICE_CODE;
     if (envUrl && envPrivateKey && envDeviceCode) {
         return {
-            url: envUrl,
+            url: envUrl.replace(/\/+$/, ''),
             deviceCode: envDeviceCode,
             privateKey: envPrivateKey,
             _source: 'env',
@@ -126,7 +126,11 @@ function getConfig() {
     try {
         const encrypted = fs.readFileSync(CONFIG_PATH, 'utf-8');
         const raw = decrypt(encrypted);
-        return JSON.parse(raw);
+        const config = JSON.parse(raw);
+        if (config.url) {
+            config.url = config.url.replace(/\/+$/, '');
+        }
+        return config;
     } catch (err) {
         // 解密失败可能是换了机器，提示用户重新配置
         if (err.code === 'ERR_OSSL_UNSUPPORTED' || err.message.includes('auth') || err.message.includes('Invalid')) {
