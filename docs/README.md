@@ -118,10 +118,10 @@ zy-cli --version
 
 ### 1. 前置准备
 
-先切到官方源再登录：
+使用命令 `npm config get registry` 查看当前源，如果不是 npmjs 则需要先切到官方源再登录：
 npm config set registry https://registry.npmjs.org/
 
-登录成功后再切回来（如果需要装包快的话）：
+登录成功后再切回来：
 npm config set registry https://registry.npmmirror.com/
 
 ```bash
