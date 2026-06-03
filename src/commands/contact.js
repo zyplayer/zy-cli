@@ -14,13 +14,24 @@ module.exports = function(program) {
         .option('--phone <phone>', '手机号')
         .action(async (opts) => {
             const config = getConfig();
-            const fields = ['id', 'userNo', 'userName', 'email', 'phone'];
+            const fields = ['id', 'userNo', 'userName', 'email', 'phone', 'departmentList'];
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             const params = buildParams(opts, ['userName', 'userNos', 'emails', 'phones'], { userNos: 'userNo', emails: 'email', phones: 'phone' });
             if (params.userNos) params.userNos = [params.userNos];
             if (params.emails) params.emails = [params.emails];
             if (params.phones) params.phones = [params.phones];
-            try { printResult(await request(config, '/openApi/v1/user/search', params), fields); }
+            try {
+                const result = await request(config, '/openApi/v1/user/search', params);
+                if (Array.isArray(result.data)) {
+                    result.data = result.data.map(item => {
+                        if (Array.isArray(item.departmentList)) {
+                            item.departmentList = item.departmentList.map(d => ({ id: d.id, departmentName: d.departmentName }));
+                        }
+                        return item;
+                    });
+                }
+                printResult(result, fields);
+            }
             catch (err) { handleError(err); }
         });
 

@@ -1,6 +1,7 @@
 /**
  * CLI 命令通用工具函数
  */
+const cheerio = require('cheerio');
 const {getConfig} = require('./config');
 const {request, uploadRequest} = require('./api');
 
@@ -77,4 +78,10 @@ function handleError(err) {
     }
 }
 
-module.exports = {getConfig, request, uploadRequest, buildParams, printResult, handleError};
+// 使用 cheerio 将 HTML 转为纯文本
+function stripHtml(html) {
+    if (!html) return '';
+    return cheerio.load(html).text();
+}
+
+module.exports = {getConfig, request, uploadRequest, buildParams, printResult, handleError, stripHtml};

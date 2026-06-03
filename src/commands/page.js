@@ -1,5 +1,4 @@
-const { getConfig, request, uploadRequest, buildParams, printResult, handleError } = require('../utils/helpers');
-const cheerio = require('cheerio');
+const { getConfig, request, uploadRequest, buildParams, printResult, handleError, stripHtml } = require('../utils/helpers');
 
 /**
  * zy-cli page —— 文档管理
@@ -13,7 +12,7 @@ module.exports = function(program) {
         .action(async (opts) => {
             const config = getConfig();
             const fields = [
-                'id', 'spaceId', 'spaceName', 'name', 'parentId', 'fullPath', 'favorite', 'editorType', 'canEdit', 'canCreate'
+                'id', 'name', 'spaceId', 'spaceName', 'parentId', 'fullPath', 'editorType', 'canEdit', 'canCreate'
             ];
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId) { console.log('--spaceId 不能为空'); return; }
@@ -30,10 +29,12 @@ module.exports = function(program) {
         .option('--parentId <parentId>', '父文档ID', Number)
         // 给cli用的这几种类型就够用了
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
-        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 5=原始文件', Number)
+        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 10=引用文档', Number)
         .option('--editVersion <editVersion>', '编辑版本号（修改时必填，需通过 zy-cli page detail 获取）', Number)
         .option('--content <content>', '文档内容（简单内容可直接传入）')
         .option('--file <file>', '文档内容文件路径（推荐，支持多行内容）')
+        .option('--quotePageId <quotePageId>', '引用源文档ID，创建引用文档（editorType=10）时使用', Number)
+        .option('--quoteSpaceId <quoteSpaceId>', '引用源文档所在空间ID（与quotePageId配合使用）', Number)
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
@@ -51,7 +52,7 @@ module.exports = function(program) {
             if (opts.editorType === 1) {
                 preview = stripHtml(content);
             }
-            const params = buildParams(opts, ['id', 'spaceId', 'name', 'parentId', 'editorType', 'editVersion']);
+            const params = buildParams(opts, ['id', 'name', 'spaceId', 'parentId', 'editorType', 'editVersion', 'quotePageId', 'quoteSpaceId']);
             params.content = content;
             params.preview = preview;
             try { printResult(await request(config, '/openApi/v1/space/page/update', params)); }
@@ -59,16 +60,16 @@ module.exports = function(program) {
         });
 
     cmd.command('upload')
-        .description('上传文档（multipart）')
+        .description('上传文件的方式新建文档')
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .option('--file <file>', '文件路径（必填）')
         // 给cli用的这几种类型就够用了
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
-        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 5=原始文件 9=表格', Number)
+        .option('--editorType <editorType>', '文档类型（必填） 0=文件夹 1=HTML 2=Markdown 5=原始文件 9=表格', Number)
         .option('--name <name>', '文档名')
         .option('--parentId <parentId>', '父文档ID', Number)
         .option('--repeatAction <repeatAction>', '重复操作 1=仍然保存 2=增加后缀保存 3=跳过重名文件 4=覆盖保存', Number)
-        .option('--autoUnzip <v>', '自动解压 0=否 1=是')
+        .option('--autoUnzip <v>', '自动解压 0=否 1=是，上传zip文件时可选')
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
@@ -81,12 +82,11 @@ module.exports = function(program) {
     cmd.command('detail')
         .description('获取文档内容和详情')
         .option('--id <id>', '文档ID（必填）', Number)
-        .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
-            if (!opts.id || !opts.spaceId) { console.log('--id 和 --spaceId 不能为空'); return; }
-            const params = buildParams(opts, ['id', 'spaceId']);
+            if (!opts.id) { console.log('--id 不能为空'); return; }
+            const params = buildParams(opts, ['id']);
             try { printResult(await request(config, '/openApi/v1/space/page/detail', params)); }
             catch (err) { handleError(err); }
         });
@@ -240,9 +240,3 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 };
-
-// 使用 cheerio 将 HTML 转为纯文本
-function stripHtml(html) {
-    if (!html) return '';
-    return cheerio.load(html).text();
-}
