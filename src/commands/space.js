@@ -36,6 +36,24 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 
+    cmd.command('share')
+        .description('设置空间分享')
+        .option('--spaceId <spaceId>', '空间ID（必填）', Number)
+        .option('--openDoc <openDoc>', '是否发布到互联网 0=否 1=是（必填）', Number)
+        .option('--shareEnablePassword <v>', '是否开启密码访问 0=否 1=是', Number)
+        .option('--sharePassword <password>', '访问密码（shareEnablePassword=1 时必填）')
+        .option('--loginRequired <v>', '是否开启登录验证 0=否 1=是', Number)
+        .action(async (opts) => {
+            const config = getConfig();
+            if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
+            if (!opts.spaceId) { console.log('--spaceId 不能为空'); return; }
+            if (opts.openDoc === undefined) { console.log('--openDoc 不能为空'); return; }
+            if (opts.shareEnablePassword === 1 && !opts.sharePassword) { console.log('开启密码访问时 --sharePassword 不能为空'); return; }
+            const params = buildParams(opts, ['spaceId', 'openDoc', 'shareEnablePassword', 'sharePassword', 'loginRequired']);
+            try { printResult(await request(config, '/openApi/v1/space/shareUpdate', params)); }
+            catch (err) { handleError(err); }
+        });
+
     cmd.command('member-list')
         .description('查看空间成员列表')
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
