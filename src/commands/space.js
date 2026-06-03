@@ -56,11 +56,12 @@ module.exports = function(program) {
         .option('--departmentIds <ids>', '部门ID，多个逗号分隔')
         .option('--roleType <roleType>', '角色类型 2=管理员 3=编辑者 4=查看者（必填）', Number)
         .option('--includeChildren <v>', '是否包含子部门 0=否 1=是', Number)
+        .option('--expirationTime <expirationTime>', '有效期限，格式：yyyy-MM-dd HH:mm:ss，不填则永久有效')
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId || !opts.roleType) { console.log('--spaceId 和 --roleType 不能为空'); return; }
-            const params = buildParams(opts, ['spaceId', 'userIds', 'departmentIds', 'roleType', 'includeChildren']);
+            const params = buildParams(opts, ['spaceId', 'userIds', 'departmentIds', 'roleType', 'includeChildren', 'expirationTime']);
             try { printResult(await request(config, '/openApi/v1/spaceAuth/addAuth', params)); }
             catch (err) { handleError(err); }
         });

@@ -1,4 +1,5 @@
 const { getConfig, request, uploadRequest, buildParams, printResult, handleError } = require('../utils/helpers');
+const cheerio = require('cheerio');
 
 /**
  * zy-cli page —— 文档管理
@@ -29,15 +30,30 @@ module.exports = function(program) {
         .option('--parentId <parentId>', '父文档ID', Number)
         // 给cli用的这几种类型就够用了
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
-        .option('--editorType <editorType>', '编辑类型 0=文件夹 1=HTML 2=Markdown 5=原始文件', Number)
+        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 5=原始文件', Number)
         .option('--editVersion <editVersion>', '编辑版本号（修改时必填，需通过 zy-cli page detail 获取）', Number)
-        .option('--content <content>', '文档内容，为空时已有的内容会被清空')
-        .option('--preview <preview>', '搜索内容/预览')
+        .option('--content <content>', '文档内容（简单内容可直接传入）')
+        .option('--file <file>', '文档内容文件路径（推荐，支持多行内容）')
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId || !opts.name) { console.log('--spaceId 和 --name 不能为空'); return; }
-            const params = buildParams(opts, ['id', 'spaceId', 'name', 'parentId', 'editorType', 'editVersion', 'content', 'preview']);
+            // 读取内容：--file 优先，否则用 --content
+            let content = '';
+            if (opts.file) {
+                try { content = require('fs').readFileSync(opts.file, 'utf-8'); }
+                catch (e) { console.log('读取文件失败: ' + e.message); return; }
+            } else if (opts.content !== undefined) {
+                content = opts.content;
+            }
+            // 自动生成预览内容，不依赖外部传入
+            let preview = content;
+            if (opts.editorType === 1) {
+                preview = stripHtml(content);
+            }
+            const params = buildParams(opts, ['id', 'spaceId', 'name', 'parentId', 'editorType', 'editVersion']);
+            params.content = content;
+            params.preview = preview;
             try { printResult(await request(config, '/openApi/v1/space/page/update', params)); }
             catch (err) { handleError(err); }
         });
@@ -95,7 +111,7 @@ module.exports = function(program) {
         .option('--shareFlag <shareFlag>', '是否公开分享 0=否 1=是（必填）', Number)
         .option('--shareIncludeChildren <v>', '分享包含子页面 0=否 1=是', Number)
         .option('--sharePassword <sharePassword>', '分享访问密码')
-        .option('--shareExpirationDate <date>', '分享有效期，格式示例：2025-12-31 23:59:59')
+        .option('--shareExpirationDate <date>', '分享有效期，格式：yyyy-MM-dd HH:mm:ss，不填则永久有效')
         .option('--uuid <uuid>', '文件唯一ID，用于指定分享的链接路径')
         .action(async (opts) => {
             const config = getConfig();
@@ -132,7 +148,8 @@ module.exports = function(program) {
             let res = await request(config, '/openApi/v1/space/page/search', params);
             // 过滤 paragraphList 中每条记录的字段
             if (res && res.data && Array.isArray(res.data)) {
-                const paraFields = ['content', 'startLine', 'endLine', 'startPos', 'endPos', 'keyword'];
+                // , 'startLine', 'endLine', 'startPos', 'endPos'
+                const paraFields = ['content', 'keyword'];
                 res.data = res.data.map(function(item) {
                     if (item.paragraphList && Array.isArray(item.paragraphList) && item.paragraphList.length > 0) {
                         item.previewContent = undefined;
@@ -201,11 +218,12 @@ module.exports = function(program) {
         .option('--roleType <roleType>', '角色 5=协作者 6=查看者（必填）', Number)
         .option('--includeChildren <v>', '是否包含子部门 0=否 1=是', Number)
         .option('--includeChildrenPage <v>', '是否包含子文档 0=否 1=是', Number)
+        .option('--expirationTime <expirationTime>', '有效期限，格式：yyyy-MM-dd HH:mm:ss，不填则永久有效')
         .action(async (opts) => {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.pageId || !opts.roleType) { console.log('--pageId 和 --roleType 不能为空'); return; }
-            const params = buildParams(opts, ['userIds', 'departmentIds', 'pageId', 'roleType', 'includeChildren', 'includeChildrenPage']);
+            const params = buildParams(opts, ['userIds', 'departmentIds', 'pageId', 'roleType', 'includeChildren', 'includeChildrenPage', 'expirationTime']);
             try { printResult(await request(config, '/openApi/v1/spaceAuth/addPageAuth', params)); }
             catch (err) { handleError(err); }
         });
@@ -222,3 +240,9 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 };
+
+// 使用 cheerio 将 HTML 转为纯文本
+function stripHtml(html) {
+    if (!html) return '';
+    return cheerio.load(html).text();
+}

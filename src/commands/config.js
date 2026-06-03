@@ -101,9 +101,10 @@ module.exports = function (program) {
             }
             // 6. 绑定设备公钥（附带私钥签名证明持有权）
             console.log('正在绑定设备...');
+            let bindResData;
             try {
                 const proof = crypto.createSign('RSA-SHA256').update(deviceCode).sign(privateKey, 'hex');
-                const bindRes = await axios.post(baseUrl + '/cli/deviceBind/bind', null, {
+                let bindRes = await axios.post(baseUrl + '/cli/deviceBind/bind', null, {
                     params: {
                         code: deviceCode,
                         publicKey: publicKey,
@@ -118,7 +119,9 @@ module.exports = function (program) {
                     console.log('设备绑定失败: ' + errMsg);
                     return;
                 }
-                console.log('设备绑定成功！');
+                bindResData = (bindRes.data && bindRes.data.data) || {};
+                const boundUser = bindResData.userName || '';
+                console.log('设备绑定成功！' + (boundUser ? ' 当前用户：' + boundUser : ''));
             } catch (e) {
                 console.log('设备绑定失败: ' + (e.response ? JSON.stringify(e.response.data) : e.message));
                 return;
@@ -128,8 +131,9 @@ module.exports = function (program) {
                 url: baseUrl,
                 deviceCode: deviceCode,
                 privateKey: privateKey,
+                userName: bindResData.userName || '',
                 version: pkg.version,
-                updatedAt: new Date().toISOString(),
+                updatedAt: formatDateTime(new Date()),
             };
             saveConfig(config);
             console.log('');
@@ -162,6 +166,9 @@ module.exports = function (program) {
             }
             console.log('         URL： ' + config.url);
             console.log('  设备绑定码： ' + (config.deviceCode || '(无)'));
+            if (config.userName) {
+                console.log('    绑定用户： ' + config.userName);
+            }
             if (config.updatedAt) {
                 console.log('    更新时间： ' + config.updatedAt);
             }
@@ -211,4 +218,10 @@ function openBrowser(url) {
     } else {
         execSync('xdg-open "' + url + '"');
     }
+}
+
+function formatDateTime(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+        + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
 }
