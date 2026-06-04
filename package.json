@@ -1,7 +1,8 @@
 {
   "name": "zyplayer",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "zyplayer-doc知识库CLI命令行工具",
+  "homepage": "https://doc.zyplayer.com/",
   "main": "src/index.js",
   "bin": {
     "zy-cli": "./bin/cli.js"
@@ -26,5 +27,9 @@
     "zyplayer-doc",
     "knowledge-base"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zyplayer/zy-cli"
+  },
   "license": "MIT"
 }

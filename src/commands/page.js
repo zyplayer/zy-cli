@@ -7,17 +7,22 @@ module.exports = function(program) {
     const cmd = program.command('page').description('空间文档管理');
 
     cmd.command('list')
-        .description('查看文档列表')
+        .description('查看文档列表（树形展示）')
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .action(async (opts) => {
             const config = getConfig();
             const fields = [
-                'id', 'name', 'spaceId', 'spaceName', 'parentId', 'fullPath', 'editorType', 'canEdit', 'canCreate'
+                'id', 'name', 'spaceId', 'parentId', 'editorType', 'children'
             ];
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId) { console.log('--spaceId 不能为空'); return; }
             const params = buildParams(opts, ['spaceId']);
-            try { printResult(await request(config, '/openApi/v1/space/page/list', params), fields); }
+            try {
+                const result = await request(config, '/openApi/v1/space/page/list', params);
+                // 递归精简 children 字段
+                result.data = filterChildren(result.data, fields);
+                printResult(result, fields);
+            }
             catch (err) { handleError(err); }
         });
 
@@ -31,8 +36,7 @@ module.exports = function(program) {
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
         .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 10=引用文档', Number)
         .option('--editVersion <editVersion>', '编辑版本号（修改时必填，需通过 zy-cli page detail 获取）', Number)
-        .option('--content <content>', '文档内容（简单内容可直接传入）')
-        .option('--file <file>', '文档内容文件路径（推荐，支持多行内容）')
+        .option('--file <file>', '文档内容的文件路径，为空则会清除文档原有内容（必填）')
         .option('--quotePageId <quotePageId>', '引用源文档ID，创建引用文档（editorType=10）时使用', Number)
         .option('--quoteSpaceId <quoteSpaceId>', '引用源文档所在空间ID（与quotePageId配合使用）', Number)
         .action(async (opts) => {
@@ -44,8 +48,11 @@ module.exports = function(program) {
             if (opts.file) {
                 try { content = require('fs').readFileSync(opts.file, 'utf-8'); }
                 catch (e) { console.log('读取文件失败: ' + e.message); return; }
-            } else if (opts.content !== undefined) {
-                content = opts.content;
+            }
+            // 如果有id参数，则内容不能为空，防止把文档内容清空
+            if (opts.id && !content) {
+                console.log('--file 参数或文件中的内容不能为空');
+                return;
             }
             // 自动生成预览内容，不依赖外部传入
             let preview = content;
@@ -240,3 +247,21 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 };
+
+// 递归精简树形 children 字段，只保留指定字段
+function filterChildren(data, fields) {
+    if (!Array.isArray(data)) return data;
+    return data.map(function(item) {
+        var filtered = {};
+        fields.forEach(function(f) {
+            if (f === 'children') {
+                if (Array.isArray(item.children) && item.children.length > 0) {
+                    filtered.children = filterChildren(item.children, fields);
+                }
+            } else if (item[f] !== undefined) {
+                filtered[f] = item[f];
+            }
+        });
+        return filtered;
+    });
+}
