@@ -86,6 +86,19 @@ module.exports = function(program) {
             catch (err) { handleError(err); }
         });
 
+    cmd.command('update-title')
+        .description('修改文档标题')
+        .option('--id <id>', '文档ID（必填）', Number)
+        .option('--name <name>', '新标题（必填）')
+        .action(async (opts) => {
+            const config = getConfig();
+            if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
+            if (!opts.id || !opts.name) { console.log('--id 和 --name 不能为空'); return; }
+            const params = buildParams(opts, ['id', 'name']);
+            try { printResult(await request(config, '/openApi/v1/space/page/updateTitle', params)); }
+            catch (err) { handleError(err); }
+        });
+
     cmd.command('detail')
         .description('获取文档内容和详情')
         .option('--id <id>', '文档ID（必填）', Number)
