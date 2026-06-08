@@ -1,4 +1,6 @@
-const { getConfig, request, uploadRequest, buildParams, printResult, handleError, stripHtml } = require('../utils/helpers');
+const { getConfig, request, uploadRequest, buildParams, printResult, handleError, stripHtml, extractImages, resolveImagePath, downloadRemoteImage, decodeDataUri, extractFileKey, batchCheckFiles, concurrentMap } = require('../utils/helpers');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * zy-cli page —— 文档管理
@@ -27,7 +29,7 @@ module.exports = function(program) {
         });
 
     cmd.command('update')
-        .description('新增或修改文档')
+        .description('新增或修改文档（适用于 HTML/Markdown/文件夹/引用文档等，内容中包含的图片将自动上传替换）')
         .option('--id <id>', '文档ID，有值为修改，无值为新增', Number)
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .option('--name <name>', '文档名（必填）')
@@ -43,18 +45,124 @@ module.exports = function(program) {
             const config = getConfig();
             if (!config.url) { console.log('未配置知识库连接信息，请先执行 zy-cli config init'); return; }
             if (!opts.spaceId || !opts.name) { console.log('--spaceId 和 --name 不能为空'); return; }
-            // 读取内容：--file 优先，否则用 --content
+            // 读取内容：--file 优先
             let content = '';
+            let fileDir = null;
             if (opts.file) {
-                try { content = require('fs').readFileSync(opts.file, 'utf-8'); }
+                try {
+                    content = fs.readFileSync(opts.file, 'utf-8');
+                    if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
+                    fileDir = path.dirname(path.resolve(opts.file));
+                }
                 catch (e) { console.log('读取文件失败: ' + e.message); return; }
             }
-            // 如果有id参数，则内容不能为空，防止把文档内容清空
+            // 如果有id参数且内容为空，则创建空文档用于后续上传图片
             if (opts.id && !content) {
                 console.log('--file 参数或文件中的内容不能为空');
                 return;
             }
-            // 自动生成预览内容，不依赖外部传入
+            // 提取所有图片引用并批量检测已存在的
+            const images = extractImages(content, opts.editorType);
+            if (images.length > 0) {
+                let pageId = opts.id;
+                // 批量检测：提取远程+本地图片的文件标识（data URI 跳过）
+                const fileKeys = images.filter(img => img.type !== 'data').map(img => extractFileKey(img.originalSrc));
+                let existedSet = new Set();
+                try { existedSet = await batchCheckFiles(config, fileKeys); }
+                catch (err) { console.log('批量检测文件失败，将全部重新上传: ' + err.message); }
+                // 过滤出需要上传的图片（已存在的跳过）
+                const newImages = images.filter(img => {
+                    const key = extractFileKey(img.originalSrc);
+                    if (key && existedSet.has(key)) {
+                        console.log('图片已存在，跳过上传: ' + img.originalSrc);
+                        return false;
+                    }
+                    return true;
+                });
+                if (newImages.length > 0) {
+                    // 没有文档ID时先新建空白文档获取ID
+                    if (!pageId) {
+                        console.log('内容包含新图片，先创建文档以获取上传目标...');
+                        const createParams = buildParams(opts, ['name', 'spaceId', 'parentId', 'editorType', 'quotePageId', 'quoteSpaceId']);
+                        createParams.content = '';
+                        createParams.preview = '';
+                        let createResult;
+                        try { createResult = await request(config, '/openApi/v1/space/page/update', createParams); }
+                        catch (err) { handleError(err); return; }
+                        if (!createResult || createResult.errCode !== 200 || !createResult.data) {
+                            console.log(createResult);
+                            console.log('创建文档失败: ' + (createResult && createResult.errMsg || '未知错误'));
+                            return;
+                        }
+                        pageId = createResult.data.id;
+                        opts.editVersion = createResult.data.editVersion;
+                        console.log('文档已创建, ID: ' + pageId);
+                    }
+                    // 第一步：本地+data 同步处理（不占并发位），远程图片并行下载
+                    const localPrepared = [];
+                    const dataPrepared = [];
+                    for (const img of newImages) {
+                        if (img.type === 'local') {
+                            const fp = resolveImagePath(img.originalSrc, fileDir);
+                            if (!fs.existsSync(fp)) {
+                                console.log('本地图片不存在，跳过: ' + img.originalSrc);
+                                continue;
+                            }
+                            localPrepared.push({ originalSrc: img.originalSrc, filePath: fp, isTemp: false });
+                        } else if (img.type === 'data') {
+                            try {
+                                const fp = decodeDataUri(img.originalSrc);
+                                dataPrepared.push({ originalSrc: img.originalSrc, filePath: fp, isTemp: true });
+                            } catch (err) {
+                                console.log('data URI 解码失败: ' + err.message);
+                            }
+                        }
+                    }
+                    const remotePrepared = (await concurrentMap(
+                        newImages.filter(img => img.type === 'remote'),
+                        async (img) => {
+                            try {
+                                const fp = await downloadRemoteImage(img.originalSrc);
+                                return { originalSrc: img.originalSrc, filePath: fp, isTemp: true };
+                            } catch (err) {
+                                console.log('远程图片下载失败: ' + img.originalSrc + ' ' + err.message);
+                                return null;
+                            }
+                        }, 5
+                    )).filter(Boolean);
+                    const prepared = [...localPrepared, ...dataPrepared, ...remotePrepared];
+                    // 第二步：并行上传
+                    const uploaded = (await concurrentMap(prepared, async (img) => {
+                        const uploadParams = {pageId: pageId};
+                        if (opts.spaceId) uploadParams.spaceId = opts.spaceId;
+                        try {
+                            const uploadResult = await uploadRequest(config, '/openApi/v1/space/page/file/upload', uploadParams, img.filePath);
+                            if (uploadResult && uploadResult.errCode === 200 && uploadResult.data && uploadResult.data.errno === 0 && uploadResult.data.data) {
+                                console.log('图片上传成功: ' + path.basename(img.filePath));
+                                return {...img, newUrl: uploadResult.data.data.url};
+                            }
+                            const errMsg = (uploadResult && uploadResult.data && uploadResult.data.message) || (uploadResult && uploadResult.errMsg) || '';
+                            console.log('图片上传失败: ' + path.basename(img.filePath) + ' ' + errMsg);
+                        } catch (err) {
+                            console.log('图片上传异常: ' + path.basename(img.filePath) + ' ' + err.message);
+                        }
+                        // 上传失败时清理远程下载的临时文件
+                        if (img.isTemp) {
+                            try { fs.unlinkSync(img.filePath); } catch (e) { /* 忽略清理错误 */ }
+                        }
+                        return null;
+                    }, 5)).filter(Boolean);
+                    // 第三步：替换内容中的地址并清理临时文件
+                    for (const img of uploaded) {
+                        content = content.split(img.originalSrc).join(img.newUrl);
+                        if (img.isTemp) {
+                            try { fs.unlinkSync(img.filePath); } catch (e) { /* 忽略清理错误 */ }
+                        }
+                    }
+                    opts.id = pageId;
+                }
+            }
+            // 自动生成预览内容
             let preview = content;
             if (opts.editorType === 1) {
                 preview = stripHtml(content);
@@ -67,12 +175,12 @@ module.exports = function(program) {
         });
 
     cmd.command('upload')
-        .description('上传文件的方式新建文档')
+        .description('上传文件的方式新建文档（适用于 doc/docx/pdf/xlsx/zip 等文件导入为在线文档或原始文件，其他类型推荐用 update 命令）')
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .option('--file <file>', '文件路径（必填）')
         // 给cli用的这几种类型就够用了
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
-        .option('--editorType <editorType>', '文档类型（必填） 0=文件夹 1=HTML 2=Markdown 5=原始文件 9=表格', Number)
+        .option('--editorType <editorType>', '文档类型（必填） 1=HTML 2=Markdown 5=原始文件 9=在线表格', Number)
         .option('--name <name>', '文档名')
         .option('--parentId <parentId>', '父文档ID', Number)
         .option('--repeatAction <repeatAction>', '重复操作 1=仍然保存 2=增加后缀保存 3=跳过重名文件 4=覆盖保存', Number)
