@@ -1,6 +1,6 @@
 {
   "name": "zyplayer",
-  "version": "1.0.5",
+  "version": "2.6.7.1",
   "description": "zyplayer-doc知识库CLI命令行工具",
   "homepage": "https://doc.zyplayer.com/",
   "main": "src/index.js",
