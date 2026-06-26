@@ -57,6 +57,7 @@ zy-cli contact <sub>    通讯录
 | `zy-cli page search` | 全文搜索文档 |
 | `zy-cli page detail` | 获取文档内容与详情 |
 | `zy-cli page update` | 新增或修改文档 |
+| `zy-cli page sync-dir` | 批量同步目录中的 Markdown/HTML 文档 |
 | `zy-cli page upload` | 上传文件到文档库 |
 | `zy-cli page delete` | 删除文档 |
 | `zy-cli page share` | 分享文档 |
@@ -101,11 +102,17 @@ zy-cli space member-remove --authId 56
 # 查看空间文档列表
 zy-cli page list --spaceId 21
 
+# 扁平输出文档列表，方便脚本 grep
+zy-cli page list --spaceId 21 --flat
+
+# 只查看某个目录下的文档，并限制树深度
+zy-cli page list --spaceId 21 --parentId 123 --depth 1
+
 # 按关键词全局搜索文档
 zy-cli page search --keywords 部署
 
 # 搜索指定空间下的文档
-zy-cli page search --spaceId 21 --keywords API 文档
+zy-cli page search --spaceId 21 --keywords API 文档 --pageSize 50
 
 # 获取文档详情（含完整内容）
 zy-cli page detail --id 123
@@ -114,7 +121,10 @@ zy-cli page detail --id 123
 zy-cli page update --spaceId 21 --name "新文档" --editorType 2 --file ./doc.md
 
 # 修改文档
-zy-cli page update --id 123 --spaceId 21 --name "修改后标题" --editorType 2 --editVersion 5 --content "# 新内容"
+zy-cli page update --id 123 --spaceId 21 --name "修改后标题" --editorType 2 --file ./doc.md
+
+# 批量同步目录中的 Markdown/HTML 文档，根据文件后缀确定编辑器类型
+zy-cli page sync-dir --spaceId 43 --parentId 18384 --dir ./docs --pattern "*.md"
 
 # 创建引用文档（指向其他文档，源文档更新时自动同步）
 zy-cli page update --spaceId 21 --name "引用副本" --editorType 10 --quotePageId 456 --quoteSpaceId 22
@@ -171,7 +181,6 @@ zy-cli contact search-dept --name 技术部
 
 - 使用前必须通过 `zy-cli config init` 完成设备绑定
 - 文档 ID、空间 ID 等可通过 `list` 命令获取
-- 修改文档时 `editVersion` 需通过 `page detail` 获取当前版本号
 
 ## License
 

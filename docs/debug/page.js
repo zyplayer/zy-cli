@@ -3,6 +3,8 @@
  * 用法：node docs/debug/page.js
  */
 const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const CLI = 'node bin/cli.js';
 const TAG = '[cli-debug:page]';
@@ -50,30 +52,18 @@ if (!pageId) {
   return;
 }
 
-// 3. 文档详情 → 拿 editVersion
-let editVersion = 0;
-const detailOutput = run(`${CLI} page detail --id ${pageId} --spaceId ${SPACE_ID}`);
-try {
-  const json = JSON.parse(detailOutput);
-  const detail = json.data || json;
-  if (detail.wikiPage?.editVersion !== undefined) {
-    editVersion = detail.wikiPage.editVersion;
-    console.log(TAG, '当前 editVersion =', editVersion);
-  }
-} catch (e) {
-  console.log(TAG, '解析 detail JSON 失败，使用 editVersion=0');
-}
+// 3. 更新文档
+const updateFile = path.join(__dirname, 'page-update-test.md');
+fs.writeFileSync(updateFile, '测试内容', 'utf-8');
+run(`${CLI} page update --id ${pageId} --spaceId ${SPACE_ID} --name "${name}-已更新" --editorType 2 --file "${updateFile}"`);
 
-// 4. 更新文档（带上 editVersion）
-run(`${CLI} page update --id ${pageId} --spaceId ${SPACE_ID} --name "${name}-已更新" --editorType 2 --editVersion ${editVersion} --content "测试内容"`);
-
-// 5. 发布文档
+// 4. 发布文档
 run(`${CLI} page release --id ${pageId}`);
 
-// 6. 分享文档
+// 5. 分享文档
 run(`${CLI} page share --id ${pageId} --shareFlag 1`);
 
-// 7. 删除文档（移到回收站）
+// 6. 删除文档（移到回收站）
 run(`${CLI} page delete --pageId ${pageId} --spaceId ${SPACE_ID} --delFlag 1`);
 
 console.log('\n' + TAG, '全部命令执行完成');
