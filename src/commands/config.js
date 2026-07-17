@@ -78,10 +78,11 @@ module.exports = function (program) {
             const verifyPath = '/cli/deviceBind/verify?code=' + deviceCode;
             const maxRetries = 60; // 最多等 5 分钟
             let verified = false;
+            let lastVerifyError = '';
             for (let i = 0; i < maxRetries; i++) {
                 await sleep(5000);
                 try {
-                    const res = await axios.get(baseUrl + verifyPath, {timeout: 10000});
+                    const res = await axios.get(baseUrl + verifyPath, {timeout: 5000});
                     const data = res.data;
                     if (data && (data.errCode === 200 || data.code === 200 || data.verified)) {
                         verified = true;
@@ -89,8 +90,20 @@ module.exports = function (program) {
                         console.log('登录验证成功！');
                         break;
                     }
+                    const verifyError = getVerifyError(data);
+                    if (verifyError && verifyError !== lastVerifyError) {
+                        lastVerifyError = verifyError;
+                        console.log('');
+                        console.log('登录验证失败: ' + verifyError);
+                    }
                     if (i % 6 === 0) process.stdout.write('.'); // 每30秒一个点
                 } catch (e) {
+                    const verifyError = getAxiosError(e);
+                    if (verifyError && verifyError !== lastVerifyError) {
+                        lastVerifyError = verifyError;
+                        console.log('');
+                        console.log('登录验证请求失败: ' + verifyError);
+                    }
                     if (i % 6 === 0) process.stdout.write('.');
                 }
             }
@@ -224,4 +237,29 @@ function formatDateTime(date) {
     const pad = (n) => String(n).padStart(2, '0');
     return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
         + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+}
+
+function getVerifyError(data) {
+    if (!data) return '响应为空';
+    const code = data.errCode !== undefined ? data.errCode : data.code;
+    const msg = data.errMsg || data.message || data.msg;
+    if (msg) return (code !== undefined ? 'code=' + code + ', ' : '') + msg;
+    if (code !== undefined && code !== 200) return 'code=' + code;
+    return '';
+}
+
+function getAxiosError(err) {
+    if (err.response) {
+        const detail = getVerifyError(err.response.data) || stringifyData(err.response.data);
+        return 'HTTP ' + err.response.status + (detail ? ', ' + detail : '');
+    }
+    if (err.code) return err.code + (err.message ? ', ' + err.message : '');
+    return err.message || 'unknown error';
+}
+
+function stringifyData(data) {
+    if (data === undefined || data === null) return '';
+    if (typeof data === 'string') return data;
+    try { return JSON.stringify(data); }
+    catch (_) { return String(data); }
 }
