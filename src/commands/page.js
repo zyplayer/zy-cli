@@ -1,6 +1,7 @@
 const { getConfig, request, uploadRequest, buildParams, printResult, handleError, stripHtml, extractImages, resolveImagePath, downloadRemoteImage, decodeDataUri, extractFileKey, batchCheckFiles, concurrentMap } = require('../utils/helpers');
 const fs = require('fs');
 const path = require('path');
+const {buildApiDocumentPreview} = require('../utils/apiDocument');
 
 /**
  * zy-cli page —— 文档管理
@@ -44,14 +45,14 @@ module.exports = function(program) {
         });
 
     cmd.command('update')
-        .description('新增或修改文档（适用于 HTML/Markdown/文件夹/引用文档等，内容中包含的图片将自动上传替换）')
+        .description('新增或修改文档（含 API 接口文档，HTML/Markdown 中的图片将自动上传替换）')
         .option('--id <id>', '文档ID，有值为修改，无值为新增', Number)
         .option('--spaceId <spaceId>', '空间ID（必填）', Number)
         .option('--name <name>', '文档名（必填）')
         .option('--parentId <parentId>', '父文档ID', Number)
         // 给cli用的这几种类型就够用了
         // 0=文件夹 1=HTML 2=Markdown 3=表格 4=大纲 5=原始文件 6=API 7=思维导图 8=drawio 9=univer表格 10=引用 11=Excalidraw 12=页面搭建
-        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 10=引用文档', Number)
+        .option('--editorType <editorType>', '编辑类型（必填） 0=文件夹 1=HTML 2=Markdown 6=API 接口文档 10=引用文档', Number)
         .option('--file <file>', '文档内容的文件路径，为空则会清除文档原有内容（必填）')
         .option('--quotePageId <quotePageId>', '引用源文档ID，创建引用文档（editorType=10）时使用', Number)
         .option('--quoteSpaceId <quoteSpaceId>', '引用源文档所在空间ID（与quotePageId配合使用）', Number)
@@ -372,10 +373,18 @@ async function updatePage(config, opts) {
         }
         catch (e) { console.log('读取文件失败: ' + e.message); return; }
     }
-    // 如果有id参数且内容为空，则创建空文档用于后续上传图片
-    if (opts.id && !content) {
+    if ((opts.id || opts.editorType === 6) && !content) {
         console.log('--file 参数或文件中的内容不能为空');
         return;
+    }
+    let apiPreview;
+    if (opts.editorType === 6) {
+        try {
+            apiPreview = buildApiDocumentPreview(content);
+        } catch (err) {
+            console.log('API 接口文档格式错误: ' + err.message);
+            return;
+        }
     }
     // 提取所有图片引用并批量检测已存在的
     const images = extractImages(content, opts.editorType);
@@ -478,7 +487,7 @@ async function updatePage(config, opts) {
         }
     }
     // 自动生成预览内容
-    let preview = content;
+    let preview = apiPreview ?? content;
     if (opts.editorType === 1) {
         preview = stripHtml(content);
     }

@@ -123,6 +123,9 @@ zy-cli page update --spaceId 21 --name "新文档" --editorType 2 --file ./doc.m
 # 修改文档
 zy-cli page update --id 123 --spaceId 21 --name "修改后标题" --editorType 2 --file ./doc.md
 
+# 新增 API 接口文档（文件为 API 编辑器的 JSON 正文）
+zy-cli page update --spaceId 21 --name "更新用户资料" --editorType 6 --file ./update-user.api.json
+
 # 批量同步目录中的 Markdown/HTML 文档，根据文件后缀确定编辑器类型
 zy-cli page sync-dir --spaceId 43 --parentId 18384 --dir ./docs --pattern "*.md"
 
