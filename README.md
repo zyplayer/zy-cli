@@ -1,6 +1,6 @@
 # zy-cli
 
-zyplayer-doc 知识库命令行工具，用于在终端管理空间、文档和通讯录。
+zyplayer-doc 知识库命令行工具，用于在终端管理空间、文档和通讯录，查询数据统计。
 
 ## 安装
 
@@ -27,6 +27,7 @@ zy-cli page search --keywords 部署指南
 zy-cli config <sub>     配置管理
 zy-cli space <sub>      空间管理
 zy-cli page <sub>       文档管理
+zy-cli stats <sub>      数据统计
 zy-cli contact <sub>    通讯录
 ```
 
@@ -66,6 +67,27 @@ zy-cli contact <sub>    通讯录
 | `zy-cli page member-list` | 查看文档成员 |
 | `zy-cli page member-add` | 添加文档成员 |
 | `zy-cli page member-remove` | 移除文档成员 |
+
+### stats — 数据统计
+
+| 命令 | 说明 |
+|------|------|
+| `zy-cli stats page-list` | 查看空间内各文档的统计列表 |
+| `zy-cli stats page-trend` | 查看指定文档的统计趋势 |
+| `zy-cli stats space-yesterday` | 查看空间昨日汇总统计 |
+| `zy-cli stats space-trend` | 查看空间汇总统计趋势 |
+| `zy-cli stats user-list` | 查看空间内各用户的统计列表 |
+| `zy-cli stats user-trend` | 查看指定用户的统计趋势 |
+
+所有统计命令都需要 `--spaceId`。列表和趋势需要用 `--startDt`、`--endDt` 指定日期范围，格式为 `yyyyMMdd`。用 `--dimension` 选择统计维度，`1` 为日（默认），`2` 为周，`3` 为月。CLI 使用设备绑定账号的空间统计查看权限。
+
+```bash
+zy-cli stats space-yesterday --spaceId 1
+zy-cli stats space-trend --spaceId 1 --startDt 20261101 --endDt 20261114
+zy-cli stats page-list --spaceId 1 --startDt 20261101 --endDt 20261114 --sortColumn visitCount --sortOrder descending
+zy-cli stats page-trend --spaceId 1 --pageId 1708 --startDt 20261101 --endDt 20261114
+zy-cli stats user-trend --spaceId 1 --userId 1 --startDt 20261101 --endDt 20261114 --dimension 2
+```
 
 ### contact — 通讯录
 
