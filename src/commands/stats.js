@@ -67,7 +67,7 @@ module.exports = function(program) {
         .option('--pageSize <number>', '每页条数，默认 10', parsePositiveInteger)
         .option('--sortColumn <field>', '排序字段，例如 visitCount')
         .addOption(new Option('--sortOrder <order>', '排序方向').choices(['ascending', 'descending']))
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-page/list', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/page/list', opts, command));
 
     cmd.command('page-trend')
         .description('查看指定文档的统计趋势')
@@ -77,12 +77,12 @@ module.exports = function(program) {
         .requiredOption('--endDt <date>', '结束日期，格式 yyyyMMdd', parseDate)
         .addOption(new Option('--dimension <dimension>', '统计维度 1=日 2=周 3=月，默认按日')
             .choices(['1', '2', '3']))
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-page/listTrend', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/page/listTrend', opts, command));
 
     cmd.command('space-yesterday')
         .description('查看空间昨日汇总统计')
         .requiredOption('--spaceId <id>', '空间ID', parseId)
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-total/yesterday', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/space/yesterday', opts, command));
 
     cmd.command('space-trend')
         .description('查看空间汇总统计趋势，每页最多 365 条')
@@ -94,7 +94,7 @@ module.exports = function(program) {
         .option('--pageNum <number>', '页码，默认 1', parsePositiveInteger)
         .option('--sortColumn <field>', '排序字段，例如 visitCount')
         .addOption(new Option('--sortOrder <order>', '排序方向').choices(['ascending', 'descending']))
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-total/list', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/space/list', opts, command));
 
     cmd.command('user-list')
         .description('查看用户统计列表')
@@ -107,7 +107,7 @@ module.exports = function(program) {
         .option('--pageSize <number>', '每页条数，默认 10', parsePositiveInteger)
         .option('--sortColumn <field>', '排序字段，例如 visitCount')
         .addOption(new Option('--sortOrder <order>', '排序方向').choices(['ascending', 'descending']))
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-user/list', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/user/list', opts, command));
 
     cmd.command('user-trend')
         .description('查看指定用户的统计趋势')
@@ -117,5 +117,5 @@ module.exports = function(program) {
         .requiredOption('--endDt <date>', '结束日期，格式 yyyyMMdd', parseDate)
         .addOption(new Option('--dimension <dimension>', '统计维度 1=日 2=周 3=月，默认按日')
             .choices(['1', '2', '3']))
-        .action((opts, command) => queryStatistics('/openApi/v1/statistics-user/listTrend', opts, command));
+        .action((opts, command) => queryStatistics('/openApi/v1/statistics/user/listTrend', opts, command));
 };
